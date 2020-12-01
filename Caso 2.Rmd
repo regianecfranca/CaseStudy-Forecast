@@ -1,0 +1,818 @@
+---
+title: "Caso 2"
+author: "Regiane Canisares França"
+date: "01 de dezembro de 2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## 1) Evolução mensal e anual das exportações brasileiras das commodities: soja, farelo de soja e óleo de soja
+
+A evolução das exportações brasileiras dos produtos de soja (soybean, soybean meal e soybean oil) pode ser visualizada nas tabelas e gráficos a seguir. Os dados foram transformados em milhões de toneladas para melhor visualização.
+
+```{r}
+# Pacotes necessários
+library(urca)
+library(vars)
+library(tseries)
+library(plyr)
+library(forecast)
+library(ggplot2)
+```
+
+```{r}
+# Extraindo os dados da base
+
+dados<-read.csv("data_comexstat.csv")
+soybeans_export_tons<-subset(dados, product == "soybeans" & type == "Export") [,c("date","tons")]
+soybeans_total_tons<-ddply(soybeans_export_tons, c("date"),summarise,soybeans_tons=(sum(tons))/1000000)
+soybeans_total_tons$date<-as.Date(soybeans_total_tons$date)
+soybeans_total_tons["Ano"]<-lubridate::year(soybeans_total_tons$date)
+soybeans_total_tons<-ddply(soybeans_total_tons, c("Ano"),summarise,soybeans_tons=sum(soybeans_tons))
+
+soybeansOil_export_tons<- subset(dados, product == "soybean_oil" & type == "Export") [,c("date","tons")]
+soybeansOil_total_tons<-ddply(soybeansOil_export_tons, c("date"),summarise,soybeansOil_tons=(sum(tons))/1000000)
+soybeansOil_total_tons$date<-as.Date(soybeansOil_total_tons$date)
+soybeansOil_total_tons["Ano"]<-lubridate::year(soybeansOil_total_tons$date)
+soybeansOil_total_tons<-ddply(soybeansOil_total_tons, c("Ano"),summarise,soybeansOil_tons=sum(soybeansOil_tons))
+
+soybeansMeal_export_tons<- subset(dados, product == "soybean_meal" & type == "Export") [,c("date","tons")]
+soybeansMeal_total_tons<-ddply(soybeansMeal_export_tons, c("date"),summarise,soybeansMeal_tons=(sum(tons))/1000000)
+soybeansMeal_total_tons$date<-as.Date(soybeansMeal_total_tons$date)
+soybeansMeal_total_tons["Ano"]<-lubridate::year(soybeansMeal_total_tons$date)
+soybeansMeal_total_tons<-ddply(soybeansMeal_total_tons, c("Ano"),summarise,soybeansMeal_tons=sum(soybeansMeal_tons))
+
+dados1<-soybeans_total_tons
+dados1["SoybeansOil_Mtons"]<-soybeansOil_total_tons$soybeansOil_tons
+dados1["SoybeansMeal_Mtons"]<-soybeansMeal_total_tons$soybeansMeal_tons
+
+names(dados1)[2]<-"Soybeans_Mtons"
+dados1
+
+```
+
+É possível visualizar melhor a evolução desses dados através do gráfico abaixo, podemos ver que aos longo dos anos a exportação da soja apresentou crescimento maior quando comparada com seus derivados.
+
+```{r}
+
+g<-ggplot(dados1) + aes(x = Ano) + geom_line(aes(y = Soybeans_Mtons,col="Soja"))
+
+g + geom_line(aes(y = SoybeansOil_Mtons, col="Óleo de soja")) + geom_line(aes(y = SoybeansMeal_Mtons, col="Farelo de Soja")) +
+  labs(title = "Evolução anual da exportação dos produtos de soja no Brasil", x = "Ano", y="Em milhões de toneladas", color = "Produtos")
+```
+
+Em uma análise de um período mais recente, podemos ver a evolução mensal desses valores ao longo de 2019, conforme os dados e gráfico a seguir:
+
+```{r}
+# Extraindo os dados da base
+
+soybeans_total_tonsM<-ddply(soybeans_export_tons, c("date"),summarise,soybeans_tons=(sum(tons))/1000000)
+soybeansOil_total_tonsM<-ddply(soybeansOil_export_tons, c("date"),summarise,soybeansOil_tons=(sum(tons))/1000000)
+soybeansMeal_total_tonsM<-ddply(soybeansMeal_export_tons, c("date"),summarise,soybeansMeal_tons=(sum(tons))/1000000)
+
+dadosM<-data.frame(soybeans_total_tonsM,soybeansOil_total_tonsM$soybeansOil_tons,soybeansMeal_total_tonsM$soybeansMeal_tons)
+names(dadosM)[2:4]<-c("Soybeans_Mtons","SoybeansOil_Mtons","SoybeansMeal_Mtons")
+
+dadosMe<-dadosM[grep("2019-",dadosM$date), ]
+dadosMe
+
+```
+
+Mais uma vez, essa evolução é melhor visualizada atravé do gráfico abaixo:
+
+```{r}
+# Gráfico
+
+grafM<-ggplot(dadosMe) + aes(x = as.Date(dadosMe$date)) + geom_line(aes(y = Soybeans_Mtons,col="Soja"))
+
+grafM + geom_line(aes(y = SoybeansOil_Mtons, col="Óleo de Soja")) + geom_line(aes(y = SoybeansMeal_Mtons, col="Farelo de Soja")) +
+  labs(title = "Evolução mensal da exportação dos produtos de soja no Brasil (2019)", x = "Mês", y="Em milhões de toneladas", color = "Produtos")
+```
+
+## 2) Os três produtos mais importantes da pauta de exportações brasileira nos últimos cinco anos
+
+Os três produtos mais importantes exportados pelo Brasil nos últimos 5 anos são: o milho, a soja (grão), que obtiveram um aumento expressivo a partir de 2018, e o açúcar, que apesar do decrescimento entre 2018 e 2019, tem importância na pauta de exportação do Brasil. Os dados e gráfico abaixo apresentam uma comparação entre estes produtos nos últimos 5 anos.
+
+```{r}
+# Extraindo os dados da base
+
+dados$date<-as.Date(dados$date)
+dados["Ano"]<-lubridate::year(dados$date)
+
+dadosExp<-subset(dados, type == "Export") [,c("Ano","product","state","country","route","tons","usd")]
+dadosExp_Pr<-ddply(dadosExp, c("Ano","product"),summarise,usd=(sum(tons/1000000)))
+dadosExp_Pr<-reshape(dadosExp_Pr, v.names = "usd", idvar = "Ano", timevar="product",direction="wide")
+dadosExp_Pr<-dadosExp_Pr[19:23, ]
+
+names(dadosExp_Pr)[2:7]<-c("Corn","Soybeans_Meal","Soybeans_Oil","Soybeans", "Sugar","Wheat")
+
+dadosExp_Pr
+```
+
+
+```{r}
+# Gráfico
+
+grafPr<-ggplot(dadosExp_Pr) + aes(x = Ano) + geom_line(aes(y = Corn,col="Milho"))
+
+grafPr + geom_line(aes(y = Soybeans_Meal, col="Farelo de Soja")) + geom_line(aes(y = Soybeans_Oil, col="Óleo de soja")) +
+  geom_line(aes(y = Soybeans, col="Soja")) + geom_line(aes(y = Sugar, col="Açúcar")) + 
+  geom_line(aes(y = Wheat, col="Trigo")) + 
+  labs(title = "Evolução da exportação dos principais produtos no Brasil", x = "Ano", y="Em milhões de toneladas", color = "Produtos")
+```
+
+## 3) Principais rotas para exportações do milho
+
+Em relação ao produto milho, os dados mostram que as rotas mais utilizadas para exportação desta commodity, nos últimos cinco anos, são sea e river. A última coluna da tabela abaixo mostra a parcela da rota mais utilizada (considerando o volume de exportações) em relação ao total exportado por outras fontes em cada ano. Isso quer dizer que, nos últimos cinco anos, a rota com maior representação na exportação do milho, que foi "Sea", obteve participação maior que 90% em todos os anos. 
+
+```{r}
+# Extraindo os dados da base
+
+dadosR<-subset(dadosExp, product == "corn") [ ,c("Ano","state","country","route","tons","usd")]
+dadosR<-ddply(dadosR, c("Ano","route"),summarise,tons=(sum(tons/1000000)))
+dadosRo<-reshape(dadosR, v.names = "tons", idvar = "Ano", timevar="route",direction="wide")
+dadosRou<-dadosRo[19:23, ]
+names(dadosRou)[2:6]<-c("Air","Ground","Other","Sea","River")
+
+dadosRou %>% mutate(Total = Air+Ground+Other+River+Sea)  %>%
+  mutate(Maior_Participação = pmax(Air,Ground,Other,River,Sea, na.rm = TRUE) / Total)
+
+```
+
+A diferença entre as rotas do milho pode ser melhor vizualizada no gráfico abaixo:
+
+```{r}
+# Gráfico
+
+grafRo<-ggplot(dadosRou) + aes(x = Ano) + geom_line(aes(y = Air,col="Ar"))
+
+grafRo + geom_line(aes(y = Ground, col="Terra")) +
+  geom_line(aes(y = Other, col="Outros")) + geom_line(aes(y = River, col="Rio")) + 
+  geom_line(aes(y = Sea, col="Mar")) + 
+  labs(title = "Exportações brasileiras por rota (milho)", x = "Ano", y="Em milhões de toneladas", color = "Rotas")
+
+```
+
+Em relação aos demais produtos, os dados extraídos abaixo revelaram que nos últimos 5 anos a rota via mar é a mais utilizada para todos os produtos.
+
+```{r}
+# Extraindo dados da base
+
+library(magrittr)
+library(dplyr)
+library(tidyr)
+
+dadosA<-ddply(dadosExp, c("Ano","route","product"),summarise,tons=(sum(tons/1000000)))
+dadosAl<-dadosA%>%filter(Ano > "2014")
+dadosAl<-spread(dadosAl,Ano,tons)
+dadosAl<-replace(x = dadosAl, list = is.na(dadosAl), values = 0)
+dadosAl
+
+```
+
+## 4) Os princiapais parceiros comerciais do Brasil para os produtos milho e açúcar
+
+Os dados consolidados abaixo mostram quais países se destacaram no comércio com o Brasil nos últimos 3 anos em relação aos produtos milho e açúcar.
+
+```{r}
+# Extraindo dados da base - Milho
+
+dadosC<-subset(dados, product == "corn") [,c("Ano","product","state","country","type","route","tons","usd")]
+dadosCo<-ddply(dadosC, c("product","Ano","country","type"),summarise,tons=(sum(tons/1000000)))
+dadosCor<-dadosCo%>%filter(Ano >"2016")
+
+dadosCorn<-spread(dadosCor,Ano,tons)
+
+dadosCorn<-replace(x = dadosCorn, list = is.na(dadosCorn), values = 0)
+
+dadosCorn<-arrange(dadosCorn,desc(dadosCorn$`2019`))
+dadosCorn[1:20, ]
+
+```
+
+De acordo com os dados, considerando os 20 países com maior volume de negócios com o Brasil, o milho tem a maioria do comércio internacional referente à vendas externas. Ordenando pelo ano mais recente (2019), 6,5 milhôes de toneladas de milho foram exportadas para o Japão, seguido do Iran, Vietnam e Coréia so Sul. Em relação as compras nacionais do produto, o Paraguai aparece em destaque no ano de 2019 com 1,4 milhôes de toneladas em importação.
+
+```{r}
+# Extraindo dados da base - Açúcar
+
+dadosAc<-subset(dados, product == "sugar") [,c("Ano","product","state","country","type","route","tons","usd")]
+dadosAc<-ddply(dadosAc, c("product","Ano","country","type"),summarise,tons=(sum(tons/1000000)))
+dadosAc<-dadosAc%>%filter(Ano >"2016")
+dadosAc<-spread(dadosAc,Ano,tons)
+dadosAc<-replace(x = dadosAc, list = is.na(dadosAc), values = 0)
+
+dadosAc<-arrange(dadosAc,desc(dadosAc$`2019`))
+dadosAc[1:20, ]
+
+```
+
+Entre os 20 países que mais compraram o açúcar brasileiro em 2019 e em milhões de toneladas, destacaram-se os países: Argélia, Bangladesh, Nigéria e Arábia Saudita.
+
+## 5) Os estados mais importantes nas exportações brasileiras para cada produto da base
+
+```{r}
+# Extraindo dados da base para cada produto
+
+# Corn
+dadosExp_Corn<-subset(dados, product == "corn" & type == "Export") [,c("Ano","product","state","country","type","route","tons","usd")]
+dadosExp_Corn<-ddply(dadosExp_Corn, c("Ano","product","state"),summarise,tons=(sum(tons/1000000)))
+dadosExp_Corn<-dadosExp_Corn%>%filter(Ano >"2014")
+dadosExp_Corn<-spread(dadosExp_Corn,Ano,tons)
+dadosExp_Corn<-replace(x = dadosExp_Corn, list = is.na(dadosExp_Corn), values = 0)
+
+dadosExp_Corn<-dadosExp_Corn %>% mutate(Soma = (`2015`+`2016`+`2017`+`2018`+`2019`))  %>%
+    mutate(Média = Soma/ 5)
+
+dadosExp_Corn<-arrange(dadosExp_Corn,desc(dadosExp_Corn$Média))
+dadosExp_Corn[1:5, ]
+```
+
+Os dados acima estão ordenados pela coluna "Média", ela mostra a média do volume exportado nos últimos 5 anos para cada estado. No caso do milho, os 5 estados que mais exportaram foram: Mato Grosso, Goiás, Paraná, Mato Grosso do Sul e São Paulo. O mesmo mecanismo foi aplicado na extração de dados de todos os produtos.
+
+```{r}
+# soybean_meal
+dadosExp_SoyM<-subset(dados, product == "soybean_meal" & type == "Export") [,c("Ano","product","state","country","type","route","tons","usd")]
+dadosExp_SoyM<-ddply(dadosExp_SoyM, c("Ano","product","state"),summarise,tons=(sum(tons/1000000)))
+dadosExp_SoyM<-dadosExp_SoyM%>%filter(Ano >"2014")
+dadosExp_SoyM<-spread(dadosExp_SoyM,Ano,tons)
+dadosExp_SoyM<-replace(x = dadosExp_SoyM, list = is.na(dadosExp_SoyM), values = 0)
+
+dadosExp_SoyM<-dadosExp_SoyM %>% mutate(Soma = (`2015`+`2016`+`2017`+`2018`+`2019`))  %>%
+  mutate(Média = Soma/ 5)
+
+dadosExp_SoyM<-arrange(dadosExp_SoyM,desc(dadosExp_SoyM$Média))
+dadosExp_SoyM[1:5, ]
+```
+
+Para o farelo de soja, os estados Mato Grosso e Paraná lideram a lista, seguido do Rio Grande do Sul, Goías e Bahia.
+
+```{r}
+# soybean_oil
+dadosExp_SoyO<-subset(dados, product == "soybean_oil" & type == "Export") [,c("Ano","product","state","country","type","route","tons","usd")]
+dadosExp_SoyO<-ddply(dadosExp_SoyO, c("Ano","product","state"),summarise,tons=(sum(tons/1000000)))
+dadosExp_SoyO<-dadosExp_SoyO%>%filter(Ano >"2014")
+dadosExp_SoyO<-spread(dadosExp_SoyO,Ano,tons)
+dadosExp_SoyO<-replace(x = dadosExp_SoyO, list = is.na(dadosExp_SoyO), values = 0)
+
+dadosExp_SoyO<-dadosExp_SoyO %>% mutate(Soma = (`2015`+`2016`+`2017`+`2018`+`2019`))  %>%
+  mutate(Média = Soma/ 5)
+
+dadosExp_SoyO<-arrange(dadosExp_SoyO,desc(dadosExp_SoyO$Média))
+dadosExp_SoyO[1:5, ]
+```
+
+O óleo de soja é mais exportado pelo Paraná, seguido pelo Mato Grosso, Rio Grande do Sul, Goiás e Santa Catarina.
+
+```{r}
+# soybeans
+dadosExp_Soy<-subset(dados, product == "soybeans" & type == "Export") [,c("Ano","product","state","country","type","route","tons","usd")]
+dadosExp_Soy<-ddply(dadosExp_Soy, c("Ano","product","state"),summarise,tons=(sum(tons/1000000)))
+dadosExp_Soy<-dadosExp_Soy%>%filter(Ano >"2014")
+dadosExp_Soy<-spread(dadosExp_Soy,Ano,tons)
+dadosExp_Soy<-replace(x = dadosExp_Soy, list = is.na(dadosExp_Soy), values = 0)
+
+dadosExp_Soy<-dadosExp_Soy %>% mutate(Soma = (`2015`+`2016`+`2017`+`2018`+`2019`))  %>%
+  mutate(Média = Soma/ 5)
+
+dadosExp_Soy<-arrange(dadosExp_Soy,desc(dadosExp_Soy$Média))
+dadosExp_Soy[1:5, ]
+```
+
+Já a soja tem os estados do Mato Grosso, Rio Grande do Sul, Paraná, Goías e Mato Grosso do Sul, como principais fontes de exportação.
+
+```{r}
+# Wheat
+dadosExp_Wh<-subset(dados, product == "wheat" & type == "Export") [,c("Ano","product","state","country","type","route","tons","usd")]
+dadosExp_Wh<-ddply(dadosExp_Wh, c("Ano","product","state"),summarise,tons=(sum(tons/1000000)))
+dadosExp_Wh<-dadosExp_Wh%>%filter(Ano >"2014")
+dadosExp_Wh<-spread(dadosExp_Wh,Ano,tons)
+dadosExp_Wh<-replace(x = dadosExp_Wh, list = is.na(dadosExp_Wh), values = 0)
+
+dadosExp_Wh<-dadosExp_Wh %>% mutate(Soma = (`2015`+`2016`+`2017`+`2018`+`2019`))  %>%
+  mutate(Média = Soma/ 5)
+
+dadosExp_Wh<-arrange(dadosExp_Wh,desc(dadosExp_Wh$Média))
+dadosExp_Wh[1:5, ]
+```
+
+De acorso com os dados, o trigo, em termos de volume, é menos exportado em relação aos outros produtos. Os estados que mais exportam essa commodity são: Rio Grande do Sul, Paraná, São Paulo, Santa Catarina e Minas Gerais.
+
+```{r}
+# sugar
+dadosExp_Su<-subset(dados, product == "sugar" & type == "Export") [,c("Ano","product","state","country","type","route","tons","usd")]
+dadosExp_Su<-ddply(dadosExp_Su, c("Ano","product","state"),summarise,tons=(sum(tons/1000000)))
+dadosExp_Su<-dadosExp_Su%>%filter(Ano >"2014")
+dadosExp_Su<-spread(dadosExp_Su,Ano,tons)
+dadosExp_Su<-replace(x = dadosExp_Su, list = is.na(dadosExp_Su), values = 0)
+
+dadosExp_Su<-dadosExp_Su %>% mutate(Soma = (`2015`+`2016`+`2017`+`2018`+`2019`))  %>%
+  mutate(Média = Soma/ 5)
+
+dadosExp_Su<-arrange(dadosExp_Su,desc(dadosExp_Su$Média))
+dadosExp_Su[1:5, ]
+
+```
+
+Por fim, o açúcar é mais comercializado internacionalmente pelos estados de São Paulo, Minas Gerais, Paraná, Alagoas e Mato Grosso do Sul.
+
+## 6) Projeção anual para os produtos soja, farelo de soja e milho, em toneladas, para os próximos 11 anos (2020-2030)
+
+```{r}
+# Extraindo os dados das variáveis do modelo
+
+## Exportações
+
+# soybeans
+dadosExp_Soyf<-subset(dados, product == "soybeans" & type == "Export") [,c("Ano","product","state","country","type","route","tons","usd")]
+dadosExp_Soyf<-ddply(dadosExp_Soyf, c("Ano"),summarise,tons=(sum(tons/1000000)))
+Exp_Soy<-ts(dadosExp_Soyf$tons, start = 1997,frequency = 1)
+
+# soybean_meal
+dadosExp_SoyMf<-subset(dados, product == "soybean_meal" & type == "Export") [,c("Ano","product","state","country","type","route","tons","usd")]
+dadosExp_SoyMf<-ddply(dadosExp_SoyMf, c("Ano"),summarise,tons=(sum(tons/1000000)))
+Exp_SoyMf<-ts(dadosExp_SoyMf$tons, start = 1997, frequency = 1)
+
+#Corn
+dadosExp_Cornf<-subset(dados, product == "corn" & type == "Export") [,c("Ano","product","state","country","type","route","tons","usd")]
+dadosExp_Cornf<-ddply(dadosExp_Cornf, c("Ano"),summarise,tons=(sum(tons/1000000)))
+Exp_Corn<-ts(dadosExp_Cornf$tons, start = 1997, frequency = 1)
+
+# Covariáveis
+
+base1<-readxl::read_xlsx("covariates.xlsx")
+write.csv2(base1,"C:/Users/regia/OneDrive/Documents/Regiane/CV/4Intelligence/Exercicio/base.csv")
+base<-read.csv2("base.csv")
+
+# GDP
+GDP_China<-base[19:41,c("gdp_china")]
+GDP_China<-ts(GDP_China, start = 1997, frequency = 1)
+
+GDP_Spain<-base[19:41,c("gdp_spain")]
+GDP_Spain<-ts(GDP_Spain, start = 1997, frequency = 1)
+
+GDP_Thailand<-base[19:41,c("gdp_thailand")]
+GDP_Thailand<-ts(GDP_Thailand, start = 1997)
+
+GDP_Netherlands<-base[19:41,c("gpd_netherlands")]
+GDP_Netherlands<-ts(GDP_Netherlands,start = 1997, frequency = 1)
+
+GDP_Iran<-base[19:41,c("gdp_iran")]
+GDP_Iran<-ts(GDP_Iran, start = 1997, frequency = 1)
+
+GDP_World<-base[19:41,c("gdp_world")]
+GDP_World<-ts(GDP_World, start = 1997, frequency = 1)
+
+GDP_Vietnam<-base[19:41,c("gdp_vietnam")]
+GDP_Vietnam<-ts(GDP_Vietnam, start = 1997, frequency = 1)
+
+GDP_Japan<-base[19:41,c("gdp_japan")]
+GDP_Japan<-ts(GDP_Japan, start = 1997, frequency = 1)
+
+GDP_Egypt<-base[19:41,c("gdp_egypt")]
+GDP_Egypt<-ts(GDP_Egypt, start = 1997, frequency = 1)
+
+# Preço
+PSoy<-base[19:41,c("price_soybeans")]
+PSoy<-ts(PSoy, start = 1997, frequency = 1)
+
+PSoyM<-base[19:41,c("price_soybean_meal")]
+PSoyM<-ts(PSoyM, start = 1997, frequency = 1)
+
+PCorn<-base[19:41,c("price_corn")]
+PCorn<-ts(PCorn, start = 1997,frequency = 1)
+```
+
+Os principais compradores dos produtos soja, farelo de soja e milho estão nos dados abaixo
+
+```{r}
+# Extraindo dados da base
+
+# Soja
+dadosExp_SoyC<-subset(dados, product == "soybeans" & type == "Export") [,c("Ano","product","state","country","type","route","tons","usd")]
+dadosExp_SoyC<-ddply(dadosExp_SoyC, c("Ano","product","country"),summarise,tons=(sum(tons/1000000)))
+dadosExp_SoyC<-dadosExp_SoyC%>%filter(Ano >"2014")
+dadosExp_SoyC<-spread(dadosExp_SoyC,Ano,tons)
+dadosExp_SoyC<-replace(x = dadosExp_SoyC, list = is.na(dadosExp_SoyC), values = 0)
+
+dadosExp_SoyC<-dadosExp_SoyC %>% mutate(Soma = (`2015`+`2016`+`2017`+`2018`+`2019`))  %>%
+  mutate(Média = Soma/ 5)
+
+dadosExp_SoyC<-arrange(dadosExp_SoyC,desc(dadosExp_SoyC$Média))
+dadosExp_SoyC[1:5, ]
+
+# Farelo de Soja
+dadosExp_SoyMC<-subset(dados, product == "soybean_meal" & type == "Export") [,c("Ano","product","state","country","type","route","tons","usd")]
+dadosExp_SoyMC<-ddply(dadosExp_SoyMC, c("Ano","product","country"),summarise,tons=(sum(tons/1000000)))
+dadosExp_SoyMC<-dadosExp_SoyMC%>%filter(Ano >"2014")
+dadosExp_SoyMC<-spread(dadosExp_SoyMC,Ano,tons)
+dadosExp_SoyMC<-replace(x = dadosExp_SoyMC, list = is.na(dadosExp_SoyMC), values = 0)
+
+dadosExp_SoyMC<-dadosExp_SoyMC %>% mutate(Soma = (`2015`+`2016`+`2017`+`2018`+`2019`))  %>%
+  mutate(Média = Soma/ 5)
+
+dadosExp_SoyMC<-arrange(dadosExp_SoyMC,desc(dadosExp_SoyMC$Média))
+dadosExp_SoyMC[1:5, ]
+
+# Milho
+dadosExp_CornC<-subset(dados, product == "corn" & type == "Export") [,c("Ano","product","state","country","type","route","tons","usd")]
+dadosExp_CornC<-ddply(dadosExp_CornC, c("Ano","product","country"),summarise,tons=(sum(tons/1000000)))
+dadosExp_CornC<-dadosExp_CornC%>%filter(Ano >"2014")
+dadosExp_CornC<-spread(dadosExp_CornC,Ano,tons)
+dadosExp_CornC<-replace(x = dadosExp_CornC, list = is.na(dadosExp_CornC), values = 0)
+
+dadosExp_CornC<-dadosExp_CornC %>% mutate(Soma = (`2015`+`2016`+`2017`+`2018`+`2019`))  %>%
+  mutate(Média = Soma/ 5)
+
+dadosExp_CornC<-arrange(dadosExp_CornC,desc(dadosExp_CornC$Média))
+dadosExp_CornC[1:5, ]
+```
+
+Visualização dos dados:
+
+```{r}
+
+# Soja
+graf<-ggplot(dadosExp_Soyf) + aes(x = Ano) + geom_line(aes(y = tons)) + labs(title = "Exportações brasileiras (Soja)", x = "Ano", y="Em milhões de toneladas")
+graf
+
+gra<-ggplot(base) + aes(x = year) + geom_line(aes(y = price_soybeans,col="Preços Soja"))
+
+gra +  geom_line(aes(y = gdp_china, col="PIB China")) + geom_line(aes(y = gdp_spain, col="PIB Espanha")) + 
+  geom_line(aes(y = gdp_thailand, col="PIB Thailândia")) + geom_line(aes(y = gpd_netherlands, col="PIB Netherlands"))+
+  geom_line(aes(y = gdp_iran, col="PIB Iran")) + geom_line(aes(y = gdp_world, col="PIB Mundo")) +
+  labs(title = "Covariáveis", x = "Ano", y="Em milhões de toneladas", color = "Legenda")
+
+
+## Farelo de soja
+
+graf_ExpSoyM<-ggplot(dadosExp_SoyMf) + aes(x = Ano) + geom_line(aes(y = tons)) + labs(title = "Exportações brasileiras (Farelo de Soja)", x = "Ano", y="Em milhões de toneladas")
+graf_ExpSoyM
+
+graf_PSoyM<-ggplot(base) + aes(x = year) + geom_line(aes(y = price_soybean_meal,col="Preços Farelo de Soja"))
+
+graf_PSoyM +  geom_line(aes(y = gdp_thailand, col="PIB Thailândia")) + geom_line(aes(y = gpd_netherlands, col="PIB Netherlands")) + geom_line(aes(y = gdp_world, col="PIB Mundo")) +
+  labs(title = "Covariáveis", x = "Ano", y="Em índice", color = "Legenda")
+
+# Milho
+
+graf_ExpCorn<-ggplot(dadosExp_Cornf) + aes(x = Ano) + geom_line(aes(y = tons)) + labs(title = "Exportações brasileiras (Milho)", x = "Ano", y="Em milhões de toneladas")
+graf_ExpCorn
+
+graf_PrCorn<-ggplot(base) + aes(x = year) + geom_line(aes(y = price_corn,col="Preços Milho"))
+
+graf_PrCorn + geom_line(aes(y = gdp_iran, col="PIB Iran")) + geom_line(aes(y = gdp_vietnam, col="PIB Vietnã")) + 
+  geom_line(aes(y = gdp_world, col="PIB Mundo")) + geom_line(aes(y = gdp_japan, col="PIB Japão")) +
+  geom_line(aes(y = gdp_egypt, col="PIB Egito")) +
+  labs(title = "Covariáveis", x = "Ano", y="Em índice", color = "Legenda")
+
+```
+
+Considerando os gráficos das séries temporais das variáveis envolvidas, que parecem mover-se de forma semelhantes ao longo do tempo, optou-se pelo modelo de Vetores Autorregressivos (VAR). Dessa forma, os próximos passos seguem abaixo, inciando com a análise da estacionariedade das séries para a projeção de cada produto.
+
+```{r}
+
+### Projeção
+## Soja
+# Estacionariedade
+
+# Exportações
+adfSoy<-adf.test(Exp_Soy)
+adfSoy
+
+adf.test(diff(diff(Exp_Soy)))
+
+Exp_SoyEst<-diff(diff(Exp_Soy))
+
+plot(Exp_SoyEst,type = "l")
+
+# Preço
+adfPr<-adf.test(PSoy)
+adfPr
+
+adf.test(diff(diff(PSoy)))
+
+PSoyEst<-diff(diff(PSoy))
+plot(PSoyEst, type = "l")
+
+# PIB China
+
+adfGDPCh<-adf.test(GDP_China)
+adfGDPCh
+
+adf.test(diff(diff(diff(GDP_China))))
+
+GDP_ChinaEst<-diff(diff(diff(GDP_China)))
+plot(GDP_ChinaEst, type="l")
+
+# GDP_Spain
+
+adfGDPSpa<-adf.test(GDP_Spain)
+adfGDPSpa
+
+adf.test(diff(diff(GDP_Spain)))
+
+adf.test(diff(diff(diff(GDP_Spain))))
+GDP_SpainEst<-diff(diff(diff(GDP_Spain)))
+plot(GDP_SpainEst,type="l")
+
+# GDP_Thailand
+
+adfGDPThai<-adf.test(GDP_Thailand)
+adfGDPThai
+
+adf.test(diff(diff(diff(GDP_Thailand))))
+
+GDP_ThailandEst<-diff(diff(diff(GDP_Thailand)))
+plot(GDP_ThailandEst,type="l")
+
+# GDP_Netherlands
+
+adfGDPNe<-adf.test(GDP_Netherlands)
+adfGDPNe
+
+adf.test(diff(diff(diff(GDP_Netherlands))))
+
+GDP_NetherlandsEst<-diff(diff(diff(GDP_Netherlands)))
+plot(GDP_NetherlandsEst,type="l")
+
+# GDP_Iran
+adfGDPIr<-adf.test(GDP_Iran)
+adfGDPIr
+
+adf.test(diff(diff(diff(GDP_Iran))))
+
+GDP_IranEst<-diff((diff(diff(GDP_Iran))))
+plot(GDP_IranEst,type="l")
+
+# GDP_World
+adfGDPWo<-adf.test(GDP_World)
+adfGDPWo
+
+adf.test(diff(diff(GDP_World)))
+
+GDP_WorldEst<-diff(diff(GDP_World))
+
+plot(GDP_WorldEst)
+
+
+```
+
+
+```{r}
+## Soja
+# Juntando todas as variáveis
+
+Soybase<-cbind(Exp_SoyEst,PSoyEst,GDP_ChinaEst,GDP_SpainEst,GDP_WorldEst)
+Soybase<-replace(x = Soybase, list = is.na(Soybase), values = 0)
+Soybase
+
+# Lags ideal
+lagselect<-vars::VARselect(Soybase,lag.max=12,type="both")
+lagselect$selection # 2
+
+# Teste de cointegração
+cointest<-urca::ca.jo(Soybase, type="trace",K=2)
+summary(cointest) # 4
+```
+
+
+A quantidade de lags ideal para o modelo, seguindo o critério de informação sugerido pelo comando VArselect resultou em 2 lags. Como o teste de cointegração de Johansen resultou em 4 séries que podem estar correlacionadas, é necessário utilizar o modelo de correção VECM, conforme será apresentado abaixo.
+
+```{r}
+# Modelo VECM
+library(tsDyn)
+ModeloVCSoy<-VECM(Soybase,2,r=4, estim = "ML")
+ModeloVCSoy
+summary(ModeloVCSoy)
+```
+
+Os resultados do modelo não foram significativos para todas as variáveis envolvidas, mas foi em certo grau de significância, para algumas variáveis importantes como a própria variável defasada, o PIB da China e do Mundo. Agora, vamos fazer um diagnóstico do modelo, fazendo alguns testes antes de realizar a projeção.
+
+```{r}
+# Transformando o modelo VECM de volta para VAR
+
+ModelVAR<-vec2var(cointest, r=4)
+
+# Autocorrelação serial
+serialtest<-serial.test(ModelVAR, lags.pt = 5)
+serialtest # >0,05 não tem autocorrelação serial
+
+# Heterocedasticidade
+archtest<-arch.test(ModelVAR, lags.multi = 3)
+archtest # > que 0,05 não tem hetecedasticidade
+
+# distribuição normal dos resíduos
+restest<-normality.test(ModelVAR, multivariate.only = TRUE)
+restest # > que 0,05 os resíduos são normalmente distribuidos
+
+```
+
+Considerando os resultados dos teste do modelo, a projeção segue abaixo. A variável de interesse é a Exp_SoyEst, que são as exportações em tons para os próximos 11 anos.
+
+```{r}
+# Forecast
+forecastSoy<-predict(ModelVAR, n.ahead = 11)
+forecastSoy
+fanchart(forecastSoy, names = "Exp_SoyEst")
+```
+
+A mesma estrutura é realizada para os dois produtos restantes:
+
+```{r}
+
+## Farelo de Soja
+# Estacionariedade
+
+# Exportações
+adfExpSoyM<-adf.test(Exp_SoyMf)
+adfExpSoyM
+
+adf.test(diff(Exp_SoyMf))
+adf.test(diff(diff(Exp_SoyMf)))
+adf.test(diff(diff(diff(Exp_SoyMf))))
+
+Exp_SoyMfEst<-diff(diff(diff(Exp_SoyMf)))
+plot(Exp_SoyMfEst)
+
+# Preço
+adfPSoyM<-adf.test(PSoyM)
+adfPSoyM
+
+adf.test(diff(PSoyM))
+adf.test(diff(diff(PSoyM)))
+
+PSoyMEst<-diff(diff(PSoyM))
+plot(PSoyMEst)
+```
+
+```{r}
+# Juntando todas as variáveis
+
+SoyMbase<-cbind(Exp_SoyMfEst,PSoyMEst,GDP_NetherlandsEst,GDP_WorldEst)
+SoyMbase<-replace(x = SoyMbase, list = is.na(SoyMbase), values = 0)
+SoyMbase
+
+# Lags ideal
+lagselect<-vars::VARselect(SoyMbase,lag.max=10,type="both")
+lagselect$selection # 3
+
+# Teste de cointegração
+cointestSoyM<-urca::ca.jo(SoyMbase, type="trace",K=3)
+summary(cointestSoyM) # r = 2
+```
+
+```{r}
+# Modelo
+
+# VECM
+library(tsDyn)
+ModelVECSoyM<-VECM(SoyMbase,3,r=2, estim = "ML")
+ModelVECSoyM
+summary(ModelVECSoyM)
+```
+
+```{r}
+# Diagnóstico do modelo
+
+# Transformando VECM em VAR
+
+ModelVARSoyM<-vec2var(cointestSoyM, r=2)
+
+# Autocorrelação serial
+serialtestSoyM<-serial.test(ModelVARSoyM, lags.pt = 10)
+serialtestSoyM # > 0,05 não tem autocorrelação serial
+
+# Heterocedasticidade
+archtest<-arch.test(ModelVARSoyM, lags.multi = 7)
+archtest # > que 0,05 não tem hetecedasticidade
+
+# distribuição normal dos resíduos
+ResSoyM<-normality.test(ModelVARSoyM, multivariate.only = TRUE)
+ResSoyM # > 0,05 é normalmente distribuido
+```
+
+```{r}
+# Forecast
+forecastSoyM<-predict(ModelVARSoyM, n.ahead = 11)
+forecastSoyM
+fanchart(forecastSoyM, names = "Exp_SoyMfEst")
+```
+
+```{r}
+## Milho
+# Estacionariedade
+
+# Exportações
+adfExpCorn<-adf.test(Exp_Corn)
+adfExpCorn
+
+adf.test(diff(Exp_Corn))
+adf.test(diff(diff(Exp_Corn)))
+
+Exp_CornEst<-diff(diff(Exp_Corn))
+plot(Exp_CornEst)
+
+# Preço
+adfPrCorn<-adf.test(PCorn)
+adfPrCorn
+
+adf.test(diff(PCorn))
+adf.test(diff(diff(PCorn)))
+
+PCornMEst<-diff(diff(PCorn))
+plot(PCornMEst)
+
+# PIBs
+#GDP_Vietnam
+adfGDPVi<-adf.test(GDP_Vietnam)
+adfGDPVi
+
+adf.test(diff(GDP_Vietnam))
+adf.test(diff(diff(GDP_Vietnam)))
+adf.test(diff(diff(diff(GDP_Vietnam))))
+
+GDP_VietnamEst<-(diff(diff(diff(GDP_Vietnam))))
+plot(GDP_VietnamEst)
+
+# GDP_Japan
+adfGDPJp<-adf.test(GDP_Japan)
+adfGDPJp
+
+adf.test(diff(GDP_Japan))
+adf.test(diff(diff(GDP_Japan)))
+adf.test(diff(diff(diff(GDP_Japan))))
+
+GDP_JapanEst<-diff(diff(diff(GDP_Japan)))
+plot(GDP_JapanEst)
+
+# GDP_Egypt
+adfGDPEg<-adf.test(GDP_Egypt)
+adfGDPEg
+
+adf.test(diff(GDP_Egypt))
+adf.test(diff(diff(GDP_Egypt)))
+adf.test(diff(diff(diff(GDP_Egypt))))
+adf.test(diff(diff(diff(diff(GDP_Egypt)))))
+adf.test(diff(diff(diff(diff(diff(GDP_Egypt))))))
+
+GDP_EgyptEst<-diff(diff(diff(diff(diff(GDP_Egypt)))))
+plot(GDP_EgyptEst)
+
+GDP_WorldEst
+GDP_IranEst
+
+```
+
+```{r}
+# Juntando todas as variáveis
+
+Cornbase<-cbind(Exp_CornEst,PCornMEst,GDP_IranEst,GDP_VietnamEst,GDP_JapanEst)
+Cornbase<-replace(x = Cornbase, list = is.na(Cornbase), values = 0)
+Cornbase
+
+# Lags ideal
+lagselect<-vars::VARselect(Cornbase,lag.max = 10,type="both")
+lagselect$selection # 2
+
+# Teste de cointegração
+cointestCorn<-urca::ca.jo(Cornbase, type="trace",K=2)
+summary(cointestCorn) #r = 4
+```
+
+```{r}
+# Modelo
+# VECM
+
+library(tsDyn)
+ModelVECCorn<-VECM(Cornbase,2,r=4, estim = "ML")
+ModelVECCorn
+summary(ModelVECCorn)
+```
+
+```{r}
+# Diagnóstico do modelo
+
+# Transformando VECM em VAR
+
+ModelVARCorn<-vec2var(cointestCorn, r=4)
+
+# Autocorrelação serial
+serialtestCorn<-serial.test(ModelVARCorn, lags.pt = 10)
+serialtestCorn # > 0,05 não tem autocorrelação serial
+
+# Heterocedasticidade
+archtestCorn<-arch.test(ModelVARCorn, lags.multi = 3)
+archtestCorn # > que 0,05 não tem hetecedasticidade
+
+# distribuição normal dos resíduos
+ResCorn<-normality.test(ModelVARCorn, multivariate.only = TRUE)
+ResCorn # > 0,05 é normalmente distribuido
+
+# Forecast
+forecastCorn<-predict(ModelVARCorn, n.ahead = 11, lambda = 0)
+forecastCorn
+fanchart(forecastCorn, names = "Exp_CornEst")
+```

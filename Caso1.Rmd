@@ -1,0 +1,304 @@
+---
+title: "Caso 1"
+author: "Regiane Canisares França"
+date: "01 de dezembro de 2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Caso 1
+
+A série de dados TFP refere-se à produtividade total dos fatores (TFP) de três países: Canadá, México e Estados Unidos. A PTF representa a parcela da produção que não é explicada pelo montante de insumos utilizados o processo produtivo. O objetivo deste tutorial é realizar uma projeção para os próximos 10 anos da PTF para os três países, utilizando o pacote forecast do R. De início vamos analisar a série de dados.
+A estrutura deste tutorial está dividida em: Análise inicial dos dados, transformação dos dados, análise das funções de autocorrelaçãoo (ACF e PACF), forecast e uma breve conclusão do estudo. 
+
+## Análise inicial dos dados
+
+```{r}
+## Extraindo os dados da base para cada país
+
+# CAN
+Dados<-read.csv("TFP.csv")
+CAN<-Dados[Dados$isocode == "CAN", ]
+rtfpna_CAN<-CAN$rtfpna
+
+# USA
+Dados<-read.csv("TFP.csv")
+USA<-Dados[Dados$isocode == "USA", ]
+rtfpna_USA<-USA$rtfpna
+
+# Mexico
+Dados<-read.csv("TFP.csv")
+MEX<-Dados[Dados$isocode == "MEX", ]
+rtfpna_MEX<-MEX$rtfpna
+```
+
+
+```{r}
+# Visualização dos dados
+par(mfrow=c(3,1))
+plot(x = CAN$year, y = rtfpna_CAN, type = "l",main='TFP CAN, constant prices, 2005 = 1',ylab = 'TFP', xlab='Year')
+
+plot(x = USA$year, y = rtfpna_USA, type = "l",main='TFP USA, constant prices, 2005 = 1',ylab = 'TFP', xlab='Year')
+
+plot(x = MEX$year, y = rtfpna_MEX, type = "l",main='TFP MEX, constant prices, 2005 = 1',ylab = 'TFP', xlab='Year')
+
+```
+
+Pela análise gráfica é possível inferir que as séries não são estacionárias, ou seja, as séries de dados dos três países não se desenvolvem ao longo do tempo aleatoriamente ao redor de uma média constante. O Canadá não apresenta uma tendência clara, diferente dos USA e México que apresentam uma tendência de alta e queda, respectivamente, nos últimos anos. Para confirmar isso será aplicado o teste Dick-Fuller Aumentado (ADF) e verificar se podemos rejeitar a hipótese nula de não estacionariedade da série com nível de significância de 5%:
+
+```{r}
+## Teste  ADF
+library(tseries)
+adf.test(rtfpna_CAN)
+# p-valor acima de 0,05 (=0.709), série não estacionária.
+
+adf.test(rtfpna_USA)
+# p-valor acima de 0,05 (=0.8475), série não estacionária.
+
+adf.test(rtfpna_MEX)
+# p-valor acima de 0,05 (=0.06289), série não estacionária.
+
+```
+
+As funções de autocorrelação também sugerem a necessidade da diferenciação das séries, com o gráfico da ACF decaindo lentamente.
+
+```{r}
+## Funções de autocorrelação (ACF e PACF)
+# Canadá
+par(mfrow=c(2,1))
+acf((rtfpna_CAN),10, main= "ACF Canadá")
+pacf((rtfpna_CAN),10, main= "PACF Canadá")
+```
+
+```{r}
+# EUA
+par(mfrow=c(2,1))
+acf((rtfpna_USA),10, main= "ACF EUA")
+pacf((rtfpna_USA),10, main= "PACF EUA")
+```
+
+```{r}
+# México
+par(mfrow=c(2,1))
+acf((rtfpna_MEX),10, main= "ACF México")
+pacf((rtfpna_MEX),10, main= "PACF México")
+```
+
+
+## Transformação da série
+
+Diferenciado as três séries duas vezes é suficiente para que elas se tornem estacionárias e atendam os requisitos do teste de Ljung-Box sobre a autocorrelação entre os dados da série.
+
+```{r}
+## Diferenciando as séries para torná-las estacionárias
+
+# diff(diff(rtfpna_CAN))
+tseries::adf.test(diff(diff(rtfpna_CAN)))
+
+# diff(diff(rtfpna_USA))
+tseries::adf.test(diff(diff(rtfpna_USA)))
+
+# diff(diff(rtfpna_MEX))
+tseries::adf.test(diff(diff(rtfpna_MEX)))
+```
+
+Todos os testes resultaram em p-valor menor que o nível de significância, sendo assim a defasagem do modelo será d=2. Graficamente temos:
+
+```{r}
+## Gráficos das séries estacionárias
+
+par(mfrow=c(3,1))
+plot.ts(diff(diff(rtfpna_CAN)), main= "Série estacionária Canadá")
+
+plot.ts(diff(diff(rtfpna_USA)), main= "Série estacionária USA")
+
+plot.ts(diff(diff(rtfpna_MEX)),main= "Série estacionária México")
+
+```
+
+O teste Ljung-Box avalia se a hipótese nula de que não existe autocorrelação entre as obervações da série já ajustada para estacionariedade (diferenciada).
+
+```{r}
+
+## Teste de Ljung-Box 
+
+par(mfrow=c(3,1))
+Box.test(diff(diff(rtfpna_CAN)), lag = log(length(diff(diff(rtfpna_CAN)))))
+Box.test(diff(diff(rtfpna_USA)), lag = log(length(diff(diff(rtfpna_USA)))))
+Box.test(diff(diff(rtfpna_MEX)), lag = log(length(diff(diff(rtfpna_MEX)))))
+
+```
+
+## Análise das funções de autocorrelação (ACF e PACF)
+
+Agora com as séries de dados estacionárias, podemos analisar suas funções de autocorrelação (por país) e definir o melhor modelo para a projeção dos dados.
+
+```{r}
+# Canadá
+par(mfrow=c(2,1))
+acf(diff(diff(rtfpna_CAN)), main= "ACF Canadá")
+pacf(diff(diff(rtfpna_CAN)), main= "PACF Canadá")
+
+```
+
+Pela análise dos gráficos, é possível visualizar 4 pontos onde há correlação significativa (pontos onde a linha pontilhada é ultrapassada) no gráfico da ACF e define o termo q ou MA do modelo. O gráfico de autocorrelação parcial (PACF) mostra 3 pontos nesta mesma situação e define o termo p ou AR do modelo. Dessa forma, vamos testar abaixo o melhor modelo considerando as opções dos termos fornecidas pelas funções de autocorrelação.
+
+```{r}
+
+## Escolha do melhor modelo para o Canadá
+
+d=2
+for(p in 1:3){
+  for(q in 1:4){
+    if(p+d+q<=8){
+      model_CAN<-arima(x=rtfpna_CAN, order = c((p-1),d,(q-1)))
+      pval<-Box.test(model_CAN$residuals, lag=log(length(model_CAN$residuals)))
+      sse<-sum(model_CAN$residuals^2)
+      cat(p-1,d,q-1, 'AIC=', model_CAN$aic, ' SSE=',sse,' p-VALUE=', pval$p.value,'\n')
+    }
+  }
+}
+
+```
+
+
+Considerando o critério Akaike (AIC) de informação e qualidade do modelo, o melhor modelo (o que possui menor valor AIC e respeitando o princípio da parcimônia) é o (ARIMA(0,2,3):
+
+```{r}
+# Modelo
+modelo_CAN<-arima(rtfpna_CAN,order=c(0,2,3)) # menor AIC
+modelo_CAN
+```
+
+Os resíduos são independentes e identicamente distribuídos (i.i.d), conforme análise abaixo. Os gráficos revelam a distribuição normal dos resíduos do modelo, confirmado pelo teste Ljung-Box.
+
+```{r}
+# Análise dos resíduos
+forecast::checkresiduals(modelo_CAN)
+```
+
+A próxima análise e projeção refere-se ao USA.
+
+```{r}
+## USA
+# Funções de autocorrelação (ACF e PACF)
+par(mfrow=c(2,1))
+acf(diff(diff(rtfpna_USA)),main= "ACF USA")
+pacf(diff(diff(rtfpna_USA)),main= "PACF USA")
+
+```
+
+Conforme realizado anteriormente, é possível visualizar 2 pontos onde há correlação significativa no gráfico da ACF, definindo o termo q ou MA do modelo. O gráfico de autocorrelação parcial (PACF) mostra 3 pontos nesta mesma situação e define o termo p ou AR do modelo. Abaixo vamos verificar o melhor modelo.
+
+```{r}
+
+# Escolha do melhor modelo para os USA
+
+d=2
+for(p in 1:3){
+  for(q in 1:2){
+    if(p+d+q<=8){
+      model_USA<-arima(x=rtfpna_USA, order = c((p-1),d,(q-1)))
+      pval<-Box.test(model_USA$residuals, lag=log(length(model_USA$residuals)))
+      sse<-sum(model_USA$residuals^2)
+      cat(p-1,d,q-1, 'AIC=', model_USA$aic, ' SSE=',sse,' p-VALUE=', pval$p.value,'\n')
+    }
+  }
+}
+```
+
+
+Pelo critério (AIC), o melhor modelo é o (ARIMA(1,2,1):
+
+```{r}
+# Modelo
+
+modelo_USA<-arima(rtfpna_USA,order=c(1,2,1))
+modelo_USA
+```
+
+A análise dos resíduos revela que o modelo é adequado para previsões, conforme análise abaixo:
+
+```{r}
+# Análise dos resíduos
+
+forecast::checkresiduals(modelo_USA)
+```
+
+Por fim, a análise e projeção para o México.
+
+```{r}
+# México
+# Funções de autocorrelação (ACF e PACF)
+
+par(mfrow=c(2,1))
+acf(diff(diff(rtfpna_MEX)), main= "ACF México") # 0, 1 
+pacf(diff(diff(rtfpna_MEX)),main= "PACF México") # 0, 1, 2, 3
+
+```
+
+No caso do México, é possével visualizar 2 pontos onde há correlação significativa no gráfico da ACF, definindo o termo q ou MA do modelo. O gráfico de autocorrelação parcial (PACF) mostra 4 pontos nesta mesma situação e define o termo p ou AR do modelo. Abaixo vamos verificar o melhor modelo, dado essas informações:
+
+```{r}
+
+# Escolha do melhor modelo para o México
+
+d=2
+for(p in 1:4){
+  for(q in 1:2){
+    if(p+d+q<=8){
+      model_MEX<-arima(x=rtfpna_MEX, order = c((p-1),d,(q-1)))
+      pval<-Box.test(model_MEX$residuals, lag=log(length(model_MEX$residuals)))
+      sse<-sum(model_MEX$residuals^2)
+      cat(p-1,d,q-1, 'AIC=', model_MEX$aic, ' SSE=',sse,' p-VALUE=', pval$p.value,'\n')
+    }
+  }
+}
+```
+
+
+Pelo critério (AIC), o melhor modelo é o (ARIMA(0,2,1):
+
+```{r}
+# Modelo
+
+modelo_MEX<-arima(rtfpna_MEX,order=c(0,2,1))
+modelo_MEX
+```
+
+Como nos demais países, a análise dos resíduos revelam que o modelo é adequado para previsões, conforme análise abaixo:
+
+```{r}
+# Análise dos resíduos
+forecast::checkresiduals(modelo_MEX)
+```
+
+## Forecast
+
+Dessa forma, podemos fazer a projeção da PTF para os próximos anos dos três países:
+
+```{r}
+# Forecast Canadá
+require(forecast)
+forecast(modelo_CAN,10)
+plot(forecast(modelo_CAN),10)
+```
+
+```{r}
+# Forecast USA
+forecast(modelo_USA,10)
+plot(forecast(modelo_USA),10)
+```
+
+```{r}
+# Forecast México
+forecast(modelo_MEX,10)
+plot(forecast(modelo_MEX),10)
+```
+
+## Conclusão
+
+As projeções dos três países mantiveram valores semelhantes ao obervado na série. Contudo, outras variáveis podem ajudar a entender e explicar melhor a PTF, variáveis como o estoque de capital (variável rkna), o PIB real (variável rgdpna) e a participação do trabalho no PIB  (variável labsh).
