@@ -1,6 +1,7 @@
 # CaseStudy-Forecast
 
 Descrição
+
 Dois estudos de caso referente à projeções econômicas, um para projeção de PTF (esse cenário considera três países) e outro que analisa a base de dados afim de responder algumas questões e efetuar a projeção de exportação de alguns produtos agrícolas.
 
 Ambiente de execução
